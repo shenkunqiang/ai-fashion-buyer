@@ -1,0 +1,5 @@
+# AI买手助手定时任务
+# 每小时更新趋势数据
+0 * * * * /usr/bin/python3 /app/ai-fashion-buyer/cron/update_trends.py >> /app/logs/cron.log 2>&1
+# 每天凌晨3点生成推荐报告
+0 3 * * * /usr/bin/python3 /app/ai-fashion-buyer/cron/generate_report.py >> /app/logs/cron.log 2>&1
