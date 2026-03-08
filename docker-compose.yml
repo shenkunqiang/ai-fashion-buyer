@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  # PostgreSQL数据库
+  postgres:
+    image: postgres:16-alpine
+    container_name: fashion-db
+    environment:
+      POSTGRES_USER: fashion
+      POSTGRES_PASSWORD: fashion2026
+      POSTGRES_DB: ai_fashion_buyer
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fashion"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis缓存
+  redis:
+    image: redis:7-alpine
+    container_name: fashion-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 后端API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fashion-backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://fashion:fashion2026@postgres:5432/ai_fashion_buyer
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: your-secret-key-change-in-production
+      AI_API_KEY: ${AI_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    restart: unless-stopped
+
+  # 前端Web
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: fashion-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    restart: unless-stopped
+
+  # Nginx反向代理
+  nginx:
+    image: nginx:alpine
+    container_name: fashion-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/ssl:/etc/nginx/ssl:ro
+      - ./frontend/out:/usr/share/nginx/html:ro
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
